@@ -35,7 +35,7 @@ class DeepQLearner(object):
         self.lib = lib
 
         # FIXME: Dep on TFBoard, how to switch to pyTorch?
-        self.tf_board_logger = TFBoardLogger(working_dir, "q")
+        self.tf_board_logger = TFBoardLogger("q", working_dir)
 
         self.total_steps = lib.get_number_of_steps_done()
 
@@ -151,10 +151,9 @@ class DeepQLearner(object):
 
 if __name__ == "__main__":
     env = gym.envs.make("Breakout-v0")
-
     working_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
-
-    with TensorFlow(working_dir) as tf_lib:
+    tf_lib = TensorFlow(working_dir)
+    with tf_lib:
         dqn = DeepQLearner(tf_lib, env, working_dir)
 
         for t, reward in dqn.run(10000):
