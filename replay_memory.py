@@ -7,7 +7,7 @@ class ReplayMemory:
 
     def __init__(self):
         self.buffer = []
-        self.replay_memory_init_size = 50000
+        self.replay_memory_init_size = 500
         self.replay_memory_size = 500000
 
     def append(self, transition):

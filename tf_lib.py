@@ -8,6 +8,7 @@ from tf_state_processor import TensorFlowStateProcessor
 class TensorFlow:
     def __init__(self, working_dir):
         tf.reset_default_graph()
+        self.global_step = tf.train.get_or_create_global_step()
 
         self.working_dir = working_dir
         self.checkpoint_dir = os.path.join(working_dir, "checkpoints")
@@ -36,15 +37,27 @@ class TensorFlow:
     def get_state_processor(self):
         return TensorFlowStateProcessor(self.sess)
 
-    def save_estimator(self):
+    def save(self):
         saver = tf.train.Saver()
         saver.save(self.sess, self.checkpoint_path)
 
     def get_number_of_steps_done(self):
-        return self.sess.run(tf.contrib.framework.get_global_step())
+        return self.sess.run(self.global_step)
 
     def __enter__(self):
         self.sess.__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.sess.__exit__(exc_type, exc_val, exc_tb)
+
+
+if __name__ == "__main__":
+    tf.reset_default_graph()
+    global_step = tf.train.get_or_create_global_step()
+
+    # print(global_step)
+
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        results = sess.run(tf.train.get_global_step())
+        print(type(results))

@@ -2,13 +2,14 @@ import tensorflow as tf
 import os
 
 class TensorFlowEstimator(object):
-    def __init__(self, sess, actions_count, tf_board_logger, scope="estimator"):
+    def __init__(self, sess, actions_count, tf_board_logger=None, scope="estimator"):
         self.sess = sess
         self.scope = scope
         self.tf_board_logger = tf_board_logger
 
         with tf.variable_scope(self.scope):
             self._build_model(actions_count)
+            self.sess.run(tf.global_variables_initializer())
 
 
     def _build_model(self, actions_count):
@@ -24,14 +25,14 @@ class TensorFlowEstimator(object):
         batch_size = tf.shape(self.X_pl)[0]
 
         # Three convolutional layers
-        conv1 = tf.contrib.layers.conv2d(X, 32, 8, 4, activation_fn=tf.nn.relu)
-        conv2 = tf.contrib.layers.conv2d(conv1, 64, 4, 2, activation_fn=tf.nn.relu)
-        conv3 = tf.contrib.layers.conv2d(conv2, 64, 3, 1, activation_fn=tf.nn.relu)
+        conv1 = tf.layers.conv2d(X, 32, 8, 4, activation=tf.nn.relu)
+        conv2 = tf.layers.conv2d(conv1, 64, 4, 2, activation=tf.nn.relu)
+        conv3 = tf.layers.conv2d(conv2, 64, 3, 1, activation=tf.nn.relu)
 
         # Fully connected layers
-        flattened = tf.contrib.layers.flatten(conv3)
-        fc1 = tf.contrib.layers.fully_connected(flattened, 512)
-        self.predictions = tf.contrib.layers.fully_connected(fc1, actions_count)
+        flattened = tf.layers.flatten(conv3)
+        fc1 = tf.layers.dense(flattened, 512)
+        self.predictions = tf.layers.dense(fc1, actions_count)
 
         # Get the predictions for the chosen actions only
         gather_indices = tf.range(batch_size) * tf.shape(self.predictions)[1] + self.actions_pl
@@ -43,7 +44,7 @@ class TensorFlowEstimator(object):
 
         # Optimizer Parameters from original paper
         self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
-        self.train_op = self.optimizer.minimize(self.loss, global_step=tf.contrib.framework.get_global_step())
+        self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
 
         # Summaries for Tensorboard
         # TODO: Move this stuff to TFBoard object
@@ -60,22 +61,25 @@ class TensorFlowEstimator(object):
     def update(self, s, a, y):
         feed_dict = {self.X_pl: s, self.y_pl: y, self.actions_pl: a}
         summaries, global_step, _, loss = self.sess.run(
-            [self.summaries, tf.contrib.framework.get_global_step(), self.train_op, self.loss],
+            [self.summaries, tf.train.get_global_step(), self.train_op, self.loss],
             feed_dict)
 
-        self.tf_board_logger.log_loss_and_q_values(summaries, global_step)
+        if self.tf_board_logger:
+            self.tf_board_logger.log_loss_and_q_values(summaries, global_step)
 
         return loss
 
     def copy_parameters_from(self, other_estimator):
-        e1_params = [t for t in tf.trainable_variables() if t.name.startswith(self.scope)]
-        e1_params = sorted(e1_params, key=lambda v: v.name)
-        e2_params = [t for t in tf.trainable_variables() if t.name.startswith(other_estimator.scope)]
-        e2_params = sorted(e2_params, key=lambda v: v.name)
+        this_estimator_params = [t for t in tf.trainable_variables() if t.name.startswith(self.scope)]
+        this_estimator_params = sorted(this_estimator_params, key=lambda v: v.name)
+        other_estimator_params = [t for t in tf.trainable_variables() if t.name.startswith(other_estimator.scope)]
+        other_estimator_params = sorted(other_estimator_params, key=lambda v: v.name)
 
         update_ops = []
-        for e1_v, e2_v in zip(e1_params, e2_params):
-            op = e2_v.assign(e1_v)
+        for this_v, other_v in zip(this_estimator_params, other_estimator_params):
+            op = this_v.assign(other_v)
             update_ops.append(op)
 
         self.sess.run(update_ops)
+
+        print("\nCopied estimator parameters from '{0}' to '{1}'.\n".format(other_estimator.scope, self.scope))

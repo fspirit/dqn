@@ -39,7 +39,7 @@ class DeepQLearner(object):
 
         self.total_steps = lib.get_number_of_steps_done()
 
-        self.epsilon_decay_schedule = EpsilonDecaySchedule(1.0, 0.1, 50000)
+        self.epsilon_decay_schedule = EpsilonDecaySchedule(1.0, 0.1, 500000)
 
         self.q_estimator = lib.get_q_estimator(self.tf_board_logger)
         self.target_estimator = lib.get_target_estimator()
@@ -51,21 +51,20 @@ class DeepQLearner(object):
         self.replay_memory = ReplayMemory()
         self.replay_memory.init_replay_memory(env, self.policy, self.state_processor, self.epsilon_decay_schedule, self.total_steps)
 
-        # TODO: What is this Monitor, can we get rid of it or improve it?
-        self.env = Monitor(env,
+        self.env_wrapper = Monitor(env,
                       directory=os.path.join(working_dir, "monitor"),
                       resume=True,
                       video_callable=lambda count: count % record_video_every == 0)
 
     def reset_env(self):
-        state = self.env.reset()
+        state = self.env_wrapper.reset()
         state = self.state_processor.process(state)
         state = np.stack([state] * 4, axis=2)
 
         return state
 
     def step(self, state, action):
-        next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
+        next_state, reward, done, _ = self.env_wrapper.step(VALID_ACTIONS[action])
         next_state = self.state_processor.process(next_state)
         next_state = np.append(state[:, :, 1:], np.expand_dims(next_state, 2), axis=2)
 
@@ -87,7 +86,7 @@ class DeepQLearner(object):
         # TODO: Shorten this function as much as possible
         for episode in range(episodes_to_run):
 
-            # Save the current checkpoint
+            # Save the current state of models
             self.lib.save()
 
             # Reset the environment
@@ -101,6 +100,8 @@ class DeepQLearner(object):
                 epsilon = self.epsilon_decay_schedule.next_epsilon(self.total_steps)
 
                 # Add epsilon to Tensorboard
+                # TODO: put together all ther logging into some structure - single interface with appenders
+                # TODO: and add lib specific loggers inside lib.addLoggers(log)
                 self.tf_board_logger.log_epsilon(epsilon, self.total_steps)
 
                 # Maybe update the target estimator
@@ -145,16 +146,16 @@ class DeepQLearner(object):
 
             yield self.total_steps, reward
 
-        env.monitor.close()
+        self.env_wrapper.monitor.close()
         return stats_storage
 
 
 if __name__ == "__main__":
     env = gym.envs.make("Breakout-v0")
-    working_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
-    tf_lib = TensorFlow(working_dir)
+    base_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
+    tf_lib = TensorFlow(base_dir)
     with tf_lib:
-        dqn = DeepQLearner(tf_lib, env, working_dir)
+        dqn = DeepQLearner(tf_lib, env, base_dir)
 
         for t, reward in dqn.run(10000):
             print("\nEpisode Reward: {}".format(reward))
