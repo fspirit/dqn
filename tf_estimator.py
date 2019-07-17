@@ -1,16 +1,13 @@
 import tensorflow as tf
-import os
+
 
 class TensorFlowEstimator(object):
-    def __init__(self, sess, actions_count, tf_board_logger=None, scope="estimator"):
+    def __init__(self, sess, actions_count, scope="estimator"):
         self.sess = sess
         self.scope = scope
-        self.tf_board_logger = tf_board_logger
 
         with tf.variable_scope(self.scope):
             self._build_model(actions_count)
-            self.sess.run(tf.global_variables_initializer())
-
 
     def _build_model(self, actions_count):
         # Placeholders for our input
@@ -46,26 +43,12 @@ class TensorFlowEstimator(object):
         self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
 
-        # Summaries for Tensorboard
-        # TODO: Move this stuff to TFBoard object
-        self.summaries = tf.summary.merge([
-            tf.summary.scalar("loss", self.loss),
-            tf.summary.histogram("loss_hist", self.losses),
-            tf.summary.histogram("q_values_hist", self.predictions),
-            tf.summary.scalar("max_q_value", tf.reduce_max(self.predictions))
-        ])
-
     def predict(self, s):
         return self.sess.run(self.predictions, {self.X_pl: s})
 
     def update(self, s, a, y):
         feed_dict = {self.X_pl: s, self.y_pl: y, self.actions_pl: a}
-        summaries, global_step, _, loss = self.sess.run(
-            [self.summaries, tf.train.get_global_step(), self.train_op, self.loss],
-            feed_dict)
-
-        if self.tf_board_logger:
-            self.tf_board_logger.log_loss_and_q_values(summaries, global_step)
+        _, loss = self.sess.run([self.train_op, self.loss], feed_dict)
 
         return loss
 

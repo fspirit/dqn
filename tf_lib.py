@@ -5,44 +5,53 @@ import common
 from tf_estimator import TensorFlowEstimator
 from tf_state_processor import TensorFlowStateProcessor
 
-class TensorFlow:
-    def __init__(self, working_dir):
-        tf.reset_default_graph()
-        self.global_step = tf.train.get_or_create_global_step()
 
-        self.working_dir = working_dir
-        self.checkpoint_dir = os.path.join(working_dir, "checkpoints")
-        self.checkpoint_path = os.path.join(self.checkpoint_dir, "model")
+class TensorFlow(object):
+
+    def __init__(self, base_dir):
+        tf.reset_default_graph()
+        self._set_up_dirs(base_dir)
+
+        self.sess = tf.Session()
+
+        self._create_estimators()
+        self._restore_or_init_vars()
+
+    def _restore_or_init_vars(self):
+        latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
+        if latest_checkpoint:
+            saver = tf.train.Saver()
+            saver.restore(self.sess, latest_checkpoint)
+        else:
+            tf.train.create_global_step()
+            self.sess.run(tf.global_variables_initializer())
+
+    def _create_estimators(self):
+        self.q_estimator = TensorFlowEstimator(self.sess, len(common.VALID_ACTIONS), scope="q")
+        self.target_q_estimator = TensorFlowEstimator(self.sess, len(common.VALID_ACTIONS), scope="target_q")
+
+    def _set_up_dirs(self, base_dir):
+        self.checkpoint_dir = os.path.join(base_dir, "checkpoints")
+        self.checkpoint_path_prefix = os.path.join(self.checkpoint_dir, "model")
 
         if not os.path.exists(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
 
-        self.sess = tf.Session()
-        self.sess.run(tf.global_variables_initializer())
-
-    def _load_estimator(self):
-        latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
-        if latest_checkpoint:
-            print("Loading model checkpoint {}...\n".format(latest_checkpoint))
-            saver = tf.train.Saver()
-            saver.restore(self.sess, latest_checkpoint)
-
-    def get_q_estimator(self, logger):
-        self._load_estimator()
-        return TensorFlowEstimator(self.sess, len(common.VALID_ACTIONS), logger, scope="q")
+    def get_q_estimator(self):
+        return self.q_estimator
 
     def get_target_estimator(self):
-        return TensorFlowEstimator(self.sess, len(common.VALID_ACTIONS), scope="target_q")
+        return self.target_q_estimator
 
     def get_state_processor(self):
         return TensorFlowStateProcessor(self.sess)
 
     def save(self):
         saver = tf.train.Saver()
-        saver.save(self.sess, self.checkpoint_path)
+        saver.save(self.sess, self.checkpoint_path_prefix, global_step=tf.train.get_global_step())
 
     def get_number_of_steps_done(self):
-        return self.sess.run(self.global_step)
+        return self.sess.run(tf.train.get_global_step())
 
     def __enter__(self):
         self.sess.__enter__()
@@ -54,8 +63,6 @@ class TensorFlow:
 if __name__ == "__main__":
     tf.reset_default_graph()
     global_step = tf.train.get_or_create_global_step()
-
-    # print(global_step)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())

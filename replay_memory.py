@@ -27,8 +27,7 @@ class ReplayMemory:
                            env,
                            policy,
                            state_processor,
-                           epsilon_decay_schedule,
-                           total_steps):
+                           next_epsilon_fn):
 
         print("Populating replay memory...")
 
@@ -36,7 +35,7 @@ class ReplayMemory:
 
         for i in range(self.replay_memory_init_size):
 
-            action = policy(state, epsilon_decay_schedule.next_epsilon(total_steps))
+            action = policy(state, next_epsilon_fn())
 
             next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
             next_state = state_processor.process(next_state)
