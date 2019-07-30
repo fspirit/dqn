@@ -14,7 +14,9 @@ class TensorFlow(object):
 
         self.sess = tf.Session()
 
+        tf.train.create_global_step()
         self._create_estimators()
+
         self._restore_or_init_vars()
 
     def _restore_or_init_vars(self):
@@ -23,7 +25,6 @@ class TensorFlow(object):
             saver = tf.train.Saver()
             saver.restore(self.sess, latest_checkpoint)
         else:
-            tf.train.create_global_step()
             self.sess.run(tf.global_variables_initializer())
 
     def _create_estimators(self):
@@ -61,10 +62,5 @@ class TensorFlow(object):
 
 
 if __name__ == "__main__":
-    tf.reset_default_graph()
-    global_step = tf.train.get_or_create_global_step()
-
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        results = sess.run(tf.train.get_global_step())
-        print(type(results))
+    tf_lib = TensorFlow("./experiments/Breakout-v0")
+    print(tf_lib.get_number_of_steps_done())

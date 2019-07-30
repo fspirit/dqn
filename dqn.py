@@ -3,13 +3,9 @@ from gym.wrappers import Monitor
 import itertools
 import numpy as np
 import os
-import sys
 
 from console_logger import ConsoleLogger
 from log import Log
-
-if "../" not in sys.path:
-  sys.path.append("../")
 
 from tf_board_logger import TFBoardLogger
 from epsilon_decay_schedule import EpsilonDecaySchedule
@@ -25,7 +21,7 @@ class DeepQLearner(object):
 
         self.total_steps = lib.get_number_of_steps_done()
 
-        self.epsilon_decay_schedule = EpsilonDecaySchedule(1.0, 0.1, 500000)
+        self.epsilon_decay_schedule = EpsilonDecaySchedule(1.0, 0.1, 1e6)
 
         self.q_estimator = lib.get_q_estimator()
         self.target_estimator = lib.get_target_estimator()
@@ -61,6 +57,7 @@ class DeepQLearner(object):
     def step(self, state, action):
         next_state, reward, done, _ = self.env_wrapper.step(VALID_ACTIONS[action])
         next_state = self.state_processor.process(next_state)
+        # Why do we do this?
         next_state = np.append(state[:, :, 1:], np.expand_dims(next_state, 2), axis=2)
 
         return next_state, reward, done
@@ -69,12 +66,14 @@ class DeepQLearner(object):
             episodes_to_run,
             update_target_estimator_every=10000,
             discount_factor=0.99,
-            batch_size=32):
+            batch_size=32,
+            save_model_every=25):
 
         # TODO: Shorten this function as much as possible
         for episode in range(episodes_to_run):
 
-            self.lib.save()
+            if episode % save_model_every == 0:
+                self.lib.save()
 
             state = self.reset_env()
             loss = None
@@ -90,7 +89,7 @@ class DeepQLearner(object):
                 if self.total_steps % update_target_estimator_every == 0:
                     self.target_estimator.copy_parameters_from(self.q_estimator)
 
-                self.log.log_step(timestep, episode, episodes_to_run, loss)
+                self.log.log_step(timestep, self.total_steps, episode, episodes_to_run, loss)
 
                 action = self.policy(state, epsilon)
                 next_state, reward, done = self.step(state, action)
@@ -128,7 +127,7 @@ class DeepQLearner(object):
 
 if __name__ == "__main__":
     env = gym.envs.make("Breakout-v0")
-    base_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
+    base_dir = os.path.abspath("./experiments/{}/01".format(env.spec.id))
     tf_lib = TensorFlow(base_dir)
     with tf_lib:
         dqn = DeepQLearner(tf_lib, env, base_dir)

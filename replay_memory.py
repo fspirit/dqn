@@ -33,7 +33,7 @@ class ReplayMemory:
 
         state = self.reset_state(env, state_processor)
 
-        for i in range(self.replay_memory_init_size):
+        for _ in range(self.replay_memory_init_size):
 
             action = policy(state, next_epsilon_fn())
 

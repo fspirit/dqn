@@ -12,14 +12,14 @@ class TensorFlowEstimator(object):
     def _build_model(self, actions_count):
         # Placeholders for our input
         # Our input are 4 RGB frames of shape 84, 84 each
-        self.X_pl = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.uint8, name="X")
+        self.input = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.uint8, name="X")
         # The TD target value
-        self.y_pl = tf.placeholder(shape=[None], dtype=tf.float32, name="y")
+        self.target_q_for_selected_actions = tf.placeholder(shape=[None], dtype=tf.float32, name="y")
         # Integer id of which action was selected
-        self.actions_pl = tf.placeholder(shape=[None], dtype=tf.int32, name="actions")
+        self.selected_actions = tf.placeholder(shape=[None], dtype=tf.int32, name="actions")
 
-        X = tf.to_float(self.X_pl) / 255.0
-        batch_size = tf.shape(self.X_pl)[0]
+        X = tf.to_float(self.input) / 255.0
+        batch_size = tf.shape(self.input)[0]
 
         # Three convolutional layers
         conv1 = tf.layers.conv2d(X, 32, 8, 4, activation=tf.nn.relu)
@@ -29,14 +29,14 @@ class TensorFlowEstimator(object):
         # Fully connected layers
         flattened = tf.layers.flatten(conv3)
         fc1 = tf.layers.dense(flattened, 512)
-        self.predictions = tf.layers.dense(fc1, actions_count)
+        self.q_values_for_all_actions = tf.layers.dense(fc1, actions_count)
 
         # Get the predictions for the chosen actions only
-        gather_indices = tf.range(batch_size) * tf.shape(self.predictions)[1] + self.actions_pl
-        self.action_predictions = tf.gather(tf.reshape(self.predictions, [-1]), gather_indices)
+        gather_indices = tf.range(batch_size) * tf.shape(self.q_values_for_all_actions)[1] + self.selected_actions
+        self.q_values_for_selected_actions = tf.gather(tf.reshape(self.q_values_for_all_actions, [-1]), gather_indices)
 
         # Calculate the loss
-        self.losses = tf.squared_difference(self.y_pl, self.action_predictions)
+        self.losses = tf.squared_difference(self.target_q_for_selected_actions, self.q_values_for_selected_actions)
         self.loss = tf.reduce_mean(self.losses)
 
         # Optimizer Parameters from original paper
@@ -44,10 +44,10 @@ class TensorFlowEstimator(object):
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
 
     def predict(self, s):
-        return self.sess.run(self.predictions, {self.X_pl: s})
+        return self.sess.run(self.q_values_for_all_actions, {self.input: s})
 
     def update(self, s, a, y):
-        feed_dict = {self.X_pl: s, self.y_pl: y, self.actions_pl: a}
+        feed_dict = {self.input: s, self.target_q_for_selected_actions: y, self.selected_actions: a}
         _, loss = self.sess.run([self.train_op, self.loss], feed_dict)
 
         return loss
@@ -65,4 +65,4 @@ class TensorFlowEstimator(object):
 
         self.sess.run(update_ops)
 
-        print("\nCopied estimator parameters from '{0}' to '{1}'.\n".format(other_estimator.scope, self.scope))
+        print("\nCopied estimator parameters from '{0}' to '{1}'.".format(other_estimator.scope, self.scope))
