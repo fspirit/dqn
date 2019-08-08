@@ -13,6 +13,7 @@ from common import *
 from replay_memory import ReplayMemory
 from make_policy import make_epsilon_greedy_policy
 from tf_lib import TensorFlow
+from downsample_frame_wrapper import DownsampleFrameWrapper
 
 class DeepQLearner(object):
 
@@ -35,10 +36,11 @@ class DeepQLearner(object):
                                               self.state_processor,
                                               lambda: self.epsilon_decay_schedule.next_epsilon(self.total_steps))
 
-        self.env_wrapper = Monitor(env,
-                      directory=os.path.join(working_dir, "monitor"),
-                      resume=True,
-                      video_callable=lambda count: count % record_video_every == 0)
+        self.env = Monitor(env,
+                           directory=os.path.join(working_dir, "monitor"),
+                           resume=True,
+                           video_callable=lambda count: count % record_video_every == 0)
+        self.env = DownsampleFrameWrapper(self.env, self.state_processor.process)
 
         self._set_up_logging(working_dir)
 
@@ -48,16 +50,13 @@ class DeepQLearner(object):
         self.log.add_logger(TFBoardLogger(base_dir))
 
     def reset_env(self):
-        state = self.env_wrapper.reset()
-        state = self.state_processor.process(state)
+        state = self.env.reset()
         state = np.stack([state] * 4, axis=2)
 
         return state
 
     def step(self, state, action):
-        next_state, reward, done, _ = self.env_wrapper.step(VALID_ACTIONS[action])
-        next_state = self.state_processor.process(next_state)
-        # Why do we do this?
+        next_state, reward, done, _ = self.env.step(VALID_ACTIONS[action])
         next_state = np.append(state[:, :, 1:], np.expand_dims(next_state, 2), axis=2)
 
         return next_state, reward, done
@@ -122,7 +121,7 @@ class DeepQLearner(object):
 
             self.log.log_episode(episode, episodes_to_run, episode_length, episode_reward, self.total_steps)
 
-        self.env_wrapper.monitor.close()
+        self.env.monitor.close()
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-class TensorFlowStateProcessor(object):
+class TensorFlowFrameDownsampler(object):
 
     def __init__(self, sess):
         self.sess = sess
@@ -15,4 +15,4 @@ class TensorFlowStateProcessor(object):
             self.output = tf.squeeze(self.output)
 
     def process(self, state):
-        return self.sess.run(self.output, { self.input_state: state })
+        return self.sess.run(self.output, {self.input_state: state})

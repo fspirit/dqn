@@ -3,7 +3,7 @@ import os
 import common
 
 from tf_estimator import TensorFlowEstimator
-from tf_state_processor import TensorFlowStateProcessor
+from tf_frame_downsampler import TensorFlowFrameDownsampler
 
 
 class TensorFlow(object):
@@ -45,7 +45,7 @@ class TensorFlow(object):
         return self.target_q_estimator
 
     def get_state_processor(self):
-        return TensorFlowStateProcessor(self.sess)
+        return TensorFlowFrameDownsampler(self.sess)
 
     def save(self):
         saver = tf.train.Saver()
